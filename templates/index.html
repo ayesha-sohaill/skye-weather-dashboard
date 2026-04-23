@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skye — Weather Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+ 
+    :root {
+      --bg1: #0a0f1e;
+      --bg2: #0d1530;
+      --accent: #4fc3f7;
+      --accent2: #7c83fd;
+      --glass: rgba(255,255,255,0.06);
+      --glass-border: rgba(255,255,255,0.12);
+      --text: #e8eaf6;
+      --muted: rgba(255,255,255,0.45);
+    }
+ 
+    body {
+      min-height: 100vh;
+      background: var(--bg1);
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      overflow-x: hidden;
+      transition: background 1.2s ease;
+    }
+ 
+    /* Animated star/particle canvas behind everything */
+    #stars { position: fixed; top:0; left:0; width:100%; height:100%; z-index:0; pointer-events:none; }
+ 
+    /* Glowing orbs */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.18;
+      pointer-events: none;
+      z-index: 0;
+      animation: drift 12s ease-in-out infinite alternate;
+    }
+    .orb1 { width:420px; height:420px; background:#4fc3f7; top:-120px; left:-100px; animation-delay:0s; }
+    .orb2 { width:360px; height:360px; background:#7c83fd; bottom:-80px; right:-80px; animation-delay:-4s; }
+    .orb3 { width:280px; height:280px; background:#26c6da; top:40%; left:60%; animation-delay:-8s; }
+ 
+    @keyframes drift {
+      from { transform: translate(0, 0) scale(1); }
+      to   { transform: translate(30px, 20px) scale(1.08); }
+    }
+ 
+    /* Page states */
+    body.hot  { --bg1:#1a0800; --bg2:#2d1200; --accent:#ff8c42; --accent2:#ff4500; }
+    body.hot  .orb1 { background:#ff6b35; }
+    body.hot  .orb2 { background:#ff4500; }
+    body.warm { --bg1:#150e00; --bg2:#241800; --accent:#f5a623; --accent2:#e67e00; }
+    body.warm .orb1 { background:#f5a623; }
+    body.warm .orb2 { background:#e67e00; }
+    body.cool { --bg1:#001428; --bg2:#001f3f; --accent:#4fc3f7; --accent2:#0288d1; }
+    body.cold { --bg1:#00111f; --bg2:#001529; --accent:#80deea; --accent2:#00acc1; }
+ 
+    /* Layout */
+    .wrapper {
+      position: relative;
+      z-index: 1;
+      max-width: 740px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 4rem;
+    }
+ 
+    /* Header */
+    .brand {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.25em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+      opacity: 0.8;
+    }
+    .headline {
+      font-size: 2.4rem;
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 2.5rem;
+      background: linear-gradient(120deg, #fff 30%, var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: fadeDown 0.7s ease both;
+    }
+ 
+    @keyframes fadeDown {
+      from { opacity:0; transform: translateY(-16px); }
+      to   { opacity:1; transform: translateY(0); }
+    }
+ 
+    /* Search */
+    .search-wrap {
+      display: flex;
+      gap: 10px;
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 18px;
+      padding: 10px;
+      backdrop-filter: blur(20px);
+      margin-bottom: 2.5rem;
+      animation: fadeDown 0.7s 0.1s ease both;
+    }
+    .search-wrap input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-family: 'Outfit', sans-serif;
+      font-size: 1rem;
+      padding: 8px 12px;
+    }
+    .search-wrap input::placeholder { color: var(--muted); }
+    .search-wrap button {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 28px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+      white-space: nowrap;
+    }
+    .search-wrap button:hover { opacity: 0.85; transform: scale(0.98); }
+ 
+    /* Error */
+    .error-box {
+      background: rgba(255,80,80,0.12);
+      border: 1px solid rgba(255,80,80,0.3);
+      border-radius: 14px;
+      padding: 1rem 1.4rem;
+      color: #ff9090;
+      margin-bottom: 1.5rem;
+      animation: fadeDown 0.4s ease both;
+    }
+ 
+    /* Main weather card */
+    .weather-card {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 28px;
+      padding: 2.2rem;
+      backdrop-filter: blur(24px);
+      margin-bottom: 1.2rem;
+      animation: fadeUp 0.6s ease both;
+      position: relative;
+      overflow: hidden;
+    }
+    .weather-card::before {
+      content: '';
+      position: absolute;
+      top: -60px; right: -60px;
+      width: 220px; height: 220px;
+      background: var(--accent);
+      border-radius: 50%;
+      opacity: 0.06;
+      pointer-events: none;
+    }
+ 
+    @keyframes fadeUp {
+      from { opacity:0; transform: translateY(24px); }
+      to   { opacity:1; transform: translateY(0); }
+    }
+ 
+    .city-name {
+      font-size: 1.8rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+    .country-badge {
+      display: inline-block;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+      background: rgba(79,195,247,0.12);
+      border: 1px solid rgba(79,195,247,0.25);
+      border-radius: 6px;
+      padding: 2px 8px;
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+    .condition-text {
+      font-size: 0.95rem;
+      color: var(--muted);
+      margin: 6px 0 1.4rem;
+    }
+    .temp-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .temp-display {
+      display: flex;
+      align-items: flex-start;
+      line-height: 1;
+    }
+    .temp-big {
+      font-size: 7rem;
+      font-weight: 700;
+      background: linear-gradient(160deg, #fff, var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1;
+    }
+    .temp-unit {
+      font-size: 2rem;
+      font-weight: 300;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+    .weather-icon {
+      width: 110px;
+      filter: drop-shadow(0 0 18px var(--accent));
+      animation: floatIcon 4s ease-in-out infinite;
+    }
+    @keyframes floatIcon {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-10px); }
+    }
+ 
+    /* Stat pills */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 1.8rem;
+    }
+    .stat-pill {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 14px 16px;
+      text-align: center;
+      transition: background 0.2s;
+    }
+    .stat-pill:hover { background: rgba(255,255,255,0.1); }
+    .stat-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .stat-value {
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+ 
+    /* Chart card */
+    .chart-card {
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 1.8rem;
+      backdrop-filter: blur(20px);
+      animation: fadeUp 0.6s 0.15s ease both;
+    }
+    .chart-title {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 1.2rem;
+    }
+ 
+    /* Divider line */
+    .divider {
+      height: 1px;
+      background: var(--glass-border);
+      margin: 1.2rem 0;
+    }
+  </style>
+</head>
+<body id="main-body">
+ 
+<!-- Background effects -->
+<canvas id="stars"></canvas>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+ 
+<div class="wrapper">
+ 
+  <!-- Header -->
+  <p class="brand">Skye / Weather</p>
+  <h1 class="headline">What's the sky<br>doing today?</h1>
+ 
+  <!-- Search -->
+  <form method="POST">
+    <div class="search-wrap">
+      <input type="text" name="city" placeholder="Search any city in the world..."
+             value="{{ weather.city if weather else '' }}" required autocomplete="off">
+      <button type="submit">Search</button>
+    </div>
+  </form>
+ 
+  <!-- Error -->
+  {% if error %}
+  <div class="error-box">{{ error }}</div>
+  {% endif %}
+ 
+  <!-- Weather result -->
+  {% if weather %}
+  <div class="weather-card">
+    <div>
+      <span class="city-name">{{ weather.city }}</span>
+      <span class="country-badge">{{ weather.country }}</span>
+    </div>
+    <p class="condition-text">{{ weather.desc }}</p>
+ 
+    <div class="temp-row">
+      <div class="temp-display">
+        <span class="temp-big">{{ weather.temp }}</span>
+        <span class="temp-unit">°C</span>
+      </div>
+      <img class="weather-icon"
+           src="https://openweathermap.org/img/wn/{{ weather.icon }}@2x.png"
+           alt="{{ weather.desc }}">
+    </div>
+ 
+    <div class="divider"></div>
+ 
+    <div class="stats-row">
+      <div class="stat-pill">
+        <div class="stat-label">Feels like</div>
+        <div class="stat-value">{{ weather.feels }}°</div>
+      </div>
+      <div class="stat-pill">
+        <div class="stat-label">Humidity</div>
+        <div class="stat-value">{{ weather.humidity }}%</div>
+      </div>
+      <div class="stat-pill">
+        <div class="stat-label">Wind</div>
+        <div class="stat-value">{{ weather.wind }}<small style="font-size:0.75rem;color:var(--muted)"> m/s</small></div>
+      </div>
+    </div>
+  </div>
+ 
+  <!-- Forecast chart -->
+  {% if labels %}
+  <div class="chart-card">
+    <p class="chart-title">5-Day Forecast</p>
+    <canvas id="forecastChart" height="110"></canvas>
+  </div>
+  {% endif %}
+  {% endif %}
+ 
+</div>
+ 
+<script>
+  // Animated starfield
+  const canvas = document.getElementById('stars');
+  const ctx2 = canvas.getContext('2d');
+  let stars = [];
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  function initStars() {
+    stars = Array.from({length: 120}, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      r: Math.random() * 1.2 + 0.3,
+      a: Math.random(),
+      speed: Math.random() * 0.008 + 0.003,
+    }));
+  }
+  function drawStars() {
+    ctx2.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+      s.a += s.speed;
+      ctx2.globalAlpha = (Math.sin(s.a) + 1) / 2 * 0.7 + 0.1;
+      ctx2.fillStyle = '#fff';
+      ctx2.beginPath();
+      ctx2.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx2.fill();
+    });
+    requestAnimationFrame(drawStars);
+  }
+  resize();
+  initStars();
+  drawStars();
+  window.addEventListener('resize', () => { resize(); initStars(); });
+ 
+  // Dynamic background
+  {% if weather %}
+  const temp = {{ weather.temp }};
+  const body = document.getElementById('main-body');
+  if      (temp >= 35) body.classList.add('hot');
+  else if (temp >= 25) body.classList.add('warm');
+  else if (temp >= 15) body.classList.add('cool');
+  else                 body.classList.add('cold');
+  {% endif %}
+ 
+  // Chart.js forecast
+  {% if labels %}
+  const ctx = document.getElementById('forecastChart').getContext('2d');
+  const accent = getComputedStyle(document.documentElement)
+                   .getPropertyValue('--accent').trim() || '#4fc3f7';
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: {{ labels | tojson }},
+      datasets: [{
+        label: 'Temp (°C)',
+        data: {{ temps | tojson }},
+        borderColor: '#4fc3f7',
+        backgroundColor: 'rgba(79,195,247,0.08)',
+        borderWidth: 2.5,
+        pointBackgroundColor: '#fff',
+        pointBorderColor: '#4fc3f7',
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        tension: 0.45,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(10,15,30,0.9)',
+          titleColor: '#4fc3f7',
+          bodyColor: '#fff',
+          borderColor: 'rgba(79,195,247,0.3)',
+          borderWidth: 1,
+          padding: 10,
+          callbacks: { label: ctx => ` ${ctx.parsed.y}°C` }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: 'rgba(255,255,255,0.5)', font: { family: 'Space Mono', size: 11 } },
+          grid:  { color: 'rgba(255,255,255,0.05)' }
+        },
+        y: {
+          ticks: { color: 'rgba(255,255,255,0.5)', font: { family: 'Space Mono', size: 11 }, callback: v => v + '°' },
+          grid:  { color: 'rgba(255,255,255,0.05)' }
+        }
+      }
+    }
+  });
+  {% endif %}
+</script>
+</body>
+</html>
+ 
